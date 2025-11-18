@@ -49,8 +49,25 @@ router.get('/file/:filename', authenticate, async (req: AuthRequest, res: Respon
     const filePath = path.join(uploadsDir, filename);
     
     if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ message: 'File not found' });
+      // File missing on disk — redirect to frontend placeholder to avoid repeated 404s
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      return res.redirect(307, `${frontendUrl}/placeholder-image.svg`);
     }
+    
+    // Set appropriate content-type based on file extension
+    const ext = path.extname(filename).toLowerCase();
+    let contentType = 'application/octet-stream';
+    if (['.jpg', '.jpeg'].includes(ext)) contentType = 'image/jpeg';
+    else if (ext === '.png') contentType = 'image/png';
+    else if (ext === '.gif') contentType = 'image/gif';
+    else if (ext === '.webp') contentType = 'image/webp';
+    else if (['.mp4'].includes(ext)) contentType = 'video/mp4';
+    else if (['.mov', '.quicktime'].includes(ext)) contentType = 'video/quicktime';
+    else if (['.avi'].includes(ext)) contentType = 'video/x-msvideo';
+    else if (['.webm'].includes(ext)) contentType = 'video/webm';
+    
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
 
     // Check if user has access to this file
     const item = await MemoryItem.findOne({ 

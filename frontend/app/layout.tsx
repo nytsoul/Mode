@@ -11,6 +11,9 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   title: 'Loves Platform - Dual-Mode Social Matching',
   description: 'Connect with love or friendship through AI-powered matching',
+  icons: {
+    icon: '/favicon.svg',
+  },
 }
 
 export default function RootLayout({

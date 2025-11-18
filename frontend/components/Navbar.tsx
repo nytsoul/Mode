@@ -34,12 +34,12 @@ export default function Navbar() {
                   Dashboard
                 </Link>
                 <Link
-                  href="/matches"
+                  href="/personality"
                   className={`px-3 py-2 rounded-md text-sm font-medium ${
-                    pathname === '/matches' ? 'text-primary-600' : 'text-gray-700 dark:text-gray-300'
+                    pathname === '/personality' ? 'text-primary-600' : 'text-gray-700 dark:text-gray-300'
                   }`}
                 >
-                  Matches
+                  💝 Quiz
                 </Link>
                 <Link
                   href="/chat"
@@ -101,9 +101,7 @@ export default function Navbar() {
                 <Link href="/dashboard" className="block px-3 py-2 rounded-md text-base font-medium">
                   Dashboard
                 </Link>
-                <Link href="/matches" className="block px-3 py-2 rounded-md text-base font-medium">
-                  Matches
-                </Link>
+                
                 <Link href="/chat" className="block px-3 py-2 rounded-md text-base font-medium">
                   Chat
                 </Link>

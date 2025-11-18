@@ -1,6 +1,7 @@
+// src/routes/auth.ts
 import express, { Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
-import jwt from 'jsonwebtoken';
+import jwt, { JwtPayload, Secret, SignOptions } from 'jsonwebtoken';
 import crypto from 'crypto';
 import User from '../models/User';
 import { generateOTP, sendSMSOTP, storeOTP, verifyOTP } from '../utils/otp';
@@ -9,7 +10,36 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 
 const router = express.Router();
 
-// Register
+/**
+ * Ensure env var exists and return it as string.
+ * Throws if missing (so runtime error is explicit).
+ */
+function getEnv(key: 'JWT_SECRET' | 'JWT_REFRESH_SECRET' | 'JWT_EXPIRES_IN' | 'JWT_REFRESH_EXPIRES_IN'): string {
+  const v = process.env[key];
+  if (!v) {
+    throw new Error(`${key} is not set in environment`);
+  }
+  return v;
+}
+
+/** Safely extract a string userId from a Mongoose-like document or other object. */
+function getUserId(user: any): string {
+  if (!user) return '';
+  try {
+    if (user._id && typeof user._id.toString === 'function') return user._id.toString();
+  } catch {
+    // ignore
+  }
+  if (user.id) return String(user.id);
+  return String(user._id ?? '');
+}
+
+/** Interface for token payload we use */
+interface MyTokenPayload extends JwtPayload {
+  userId?: string;
+}
+
+/* -------------------- REGISTER -------------------- */
 router.post(
   '/register',
   [
@@ -22,19 +52,15 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
-      }
+      if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
       const { name, email, phone, password, dob, gender, pronouns, location, bio, interests, profilePhotos, modeDefault } = req.body;
 
-      // Check if user exists
       const existingUser = await User.findOne({ $or: [{ email }, { phone }] });
       if (existingUser) {
         return res.status(400).json({ message: 'User with this email or phone already exists' });
       }
 
-      // Create user
       const user = new User({
         name,
         email,
@@ -48,38 +74,34 @@ router.post(
         interests: interests || [],
         profilePhotos: profilePhotos || [],
         modeDefault: modeDefault || 'love',
-        modeLocked: true, // Lock mode after registration
+        modeLocked: true,
       });
 
       await user.save();
 
-      // Generate verification tokens
+      // Verification tokens
       const emailToken = crypto.randomBytes(32).toString('hex');
       const phoneOTP = generateOTP();
 
-      // Store tokens
-      storeOTP(`email:${user._id}`, emailToken, 1440); // 24 hours
-      storeOTP(`phone:${user._id}`, phoneOTP, 10); // 10 minutes
+      storeOTP(`email:${getUserId(user)}`, emailToken, 1440); // 24 hours
+      storeOTP(`phone:${getUserId(user)}`, phoneOTP, 10); // 10 minutes
 
-      // Send verification
       await sendVerificationEmail(user.email, emailToken);
       await sendSMSOTP(user.phone, phoneOTP);
 
-      // Generate JWT
-      if (!process.env.JWT_SECRET) {
-        console.error('JWT_SECRET is not configured in .env');
-        return res.status(500).json({ message: 'Server configuration error. Please contact support.' });
-      }
+      // JWT creation
+      const JWT_SECRET = getEnv('JWT_SECRET');
+      const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '24h';
 
-      const token = jwt.sign({ userId: user._id.toString() }, process.env.JWT_SECRET, {
-        expiresIn: process.env.JWT_EXPIRES_IN || '24h',
-      });
+      const userId = getUserId(user);
+      const signOptions = { expiresIn: JWT_EXPIRES_IN } as unknown as SignOptions;
+      const token = jwt.sign({ userId }, JWT_SECRET as Secret, signOptions);
 
       res.status(201).json({
         message: 'Registration successful. Please verify your email and phone.',
         token,
         user: {
-          id: user._id,
+          id: userId,
           name: user.name,
           email: user.email,
           modeDefault: user.modeDefault,
@@ -92,63 +114,53 @@ router.post(
   }
 );
 
-// Verify Email
+/* -------------------- VERIFY EMAIL -------------------- */
 router.post('/verify-email', async (req: Request, res: Response) => {
   try {
-    const { token } = req.body;
-    const userId = req.body.userId;
+    const { userId, token } = req.body;
+    if (!token || !userId) return res.status(400).json({ message: 'Token and userId are required' });
 
-    if (!token || !userId) {
-      return res.status(400).json({ message: 'Token and userId are required' });
-    }
-
-    const stored = (global as any).otpStore?.get(`email:${userId}`);
-    if (!stored || stored.otp !== token || Date.now() > stored.expiresAt) {
-      return res.status(400).json({ message: 'Invalid or expired token' });
+    if (!verifyOTP(`email:${userId}`, token)) {
+      return res.status(400).json({ message: 'Invalid or expired verification token' });
     }
 
     const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
     user.isEmailVerified = true;
     await user.save();
 
-    res.json({ message: 'Email verified successfully' });
+    res.json({ message: 'Email verified successfully', user: { id: user._id, name: user.name, email: user.email } });
   } catch (error: any) {
+    console.error('Verify email error:', error);
     res.status(500).json({ message: error.message });
   }
 });
 
-// Verify Phone
+/* -------------------- VERIFY PHONE -------------------- */
 router.post('/verify-phone', async (req: Request, res: Response) => {
   try {
     const { userId, otp } = req.body;
-
-    if (!userId || !otp) {
-      return res.status(400).json({ message: 'UserId and OTP are required' });
-    }
+    if (!userId || !otp) return res.status(400).json({ message: 'UserId and OTP are required' });
 
     if (!verifyOTP(`phone:${userId}`, otp)) {
       return res.status(400).json({ message: 'Invalid or expired OTP' });
     }
 
     const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
     user.isPhoneVerified = true;
     await user.save();
 
-    res.json({ message: 'Phone verified successfully' });
+    res.json({ message: 'Phone verified successfully', user: { id: user._id, name: user.name, phone: user.phone } });
   } catch (error: any) {
+    console.error('Verify phone error:', error);
     res.status(500).json({ message: error.message });
   }
 });
 
-// Login
+/* -------------------- LOGIN -------------------- */
 router.post(
   '/login',
   [
@@ -158,34 +170,33 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
-      }
+      if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
       const { email, password } = req.body;
-
       const user = await User.findOne({ email });
-      if (!user || !(await user.comparePassword(password))) {
+
+      if (!user || !(await (user as any).comparePassword(password))) {
         return res.status(401).json({ message: 'Invalid credentials' });
       }
 
-      if (!process.env.JWT_SECRET || !process.env.JWT_REFRESH_SECRET) {
-        return res.status(500).json({ message: 'Server configuration error' });
-      }
+      const JWT_SECRET = getEnv('JWT_SECRET');
+      const JWT_REFRESH_SECRET = getEnv('JWT_REFRESH_SECRET');
+      const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '24h';
+      const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN ?? '7d';
 
-      const token = jwt.sign({ userId: user._id.toString() }, process.env.JWT_SECRET, {
-        expiresIn: process.env.JWT_EXPIRES_IN || '24h',
-      });
+      const userId = getUserId(user);
 
-      const refreshToken = jwt.sign({ userId: user._id.toString() }, process.env.JWT_REFRESH_SECRET, {
-        expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
-      });
+      const signOptions = { expiresIn: JWT_EXPIRES_IN } as unknown as SignOptions;
+      const refreshSignOptions = { expiresIn: JWT_REFRESH_EXPIRES_IN } as unknown as SignOptions;
+
+      const token = jwt.sign({ userId }, JWT_SECRET as Secret, signOptions);
+      const refreshToken = jwt.sign({ userId }, JWT_REFRESH_SECRET as Secret, refreshSignOptions);
 
       res.json({
         token,
         refreshToken,
         user: {
-          id: user._id,
+          id: userId,
           name: user.name,
           email: user.email,
           modeDefault: user.modeDefault,
@@ -194,93 +205,97 @@ router.post(
         },
       });
     } catch (error: any) {
+      console.error('Login error:', error);
       res.status(500).json({ message: error.message });
     }
   }
 );
 
-// Refresh Token
+/* -------------------- REFRESH TOKEN -------------------- */
 router.post('/refresh', async (req: Request, res: Response) => {
   try {
     const { refreshToken } = req.body;
+    if (!refreshToken) return res.status(401).json({ message: 'Refresh token required' });
 
-    if (!refreshToken) {
-      return res.status(401).json({ message: 'Refresh token required' });
+    const JWT_REFRESH_SECRET = getEnv('JWT_REFRESH_SECRET');
+    const JWT_SECRET = getEnv('JWT_SECRET');
+    const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '24h';
+
+    const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET as Secret) as MyTokenPayload | string;
+
+    let userId: string | undefined;
+    if (typeof decoded === 'object' && decoded !== null) {
+      userId = decoded.userId ? String(decoded.userId) : undefined;
     }
 
-    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET!) as { userId: string };
-    if (!process.env.JWT_SECRET) {
-      return res.status(500).json({ message: 'Server configuration error' });
+    if (!userId) {
+      return res.status(401).json({ message: 'Invalid refresh token payload' });
     }
 
-    const newToken = jwt.sign({ userId: decoded.userId }, process.env.JWT_SECRET, {
-      expiresIn: process.env.JWT_EXPIRES_IN || '24h',
-    });
-
+    const signOptions = { expiresIn: JWT_EXPIRES_IN } as unknown as SignOptions;
+    const newToken = jwt.sign({ userId }, JWT_SECRET as Secret, signOptions);
     res.json({ token: newToken });
-  } catch (error) {
+  } catch (error: any) {
+    console.error('Refresh error:', error);
     res.status(401).json({ message: 'Invalid refresh token' });
   }
 });
 
-// Forgot Password
+/* -------------------- FORGOT PASSWORD -------------------- */
 router.post('/forgot-password', [body('email').isEmail()], async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
     const user = await User.findOne({ email });
 
     if (!user) {
-      // Don't reveal if user exists
+      // don't reveal existence
       return res.json({ message: 'If the email exists, a reset link has been sent' });
     }
 
     const resetToken = crypto.randomBytes(32).toString('hex');
-    storeOTP(`reset:${user._id}`, resetToken, 60); // 1 hour
+    storeOTP(`reset:${getUserId(user)}`, resetToken, 60); // 1 hour
 
     await sendPasswordResetEmail(user.email, resetToken);
-
     res.json({ message: 'If the email exists, a reset link has been sent' });
   } catch (error: any) {
+    console.error('Forgot password error:', error);
     res.status(500).json({ message: error.message });
   }
 });
 
-// Reset Password
+/* -------------------- RESET PASSWORD -------------------- */
 router.post('/reset-password', async (req: Request, res: Response) => {
   try {
     const { token, userId, newPassword } = req.body;
-
-    if (!token || !userId || !newPassword) {
-      return res.status(400).json({ message: 'Token, userId, and newPassword are required' });
-    }
+    if (!token || !userId || !newPassword) return res.status(400).json({ message: 'Token, userId, and newPassword are required' });
 
     if (!verifyOTP(`reset:${userId}`, token)) {
       return res.status(400).json({ message: 'Invalid or expired token' });
     }
 
     const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
     user.password = newPassword;
     await user.save();
 
     res.json({ message: 'Password reset successfully' });
   } catch (error: any) {
+    console.error('Reset password error:', error);
     res.status(500).json({ message: error.message });
   }
 });
 
-// Get current user
+/* -------------------- GET CURRENT USER -------------------- */
 router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
   try {
+    // authenticate middleware must set req.userId as string
     const user = await User.findById(req.userId).select('-password -securityPassphraseHash');
     res.json({ user });
   } catch (error: any) {
+    console.error('Get me error:', error);
     res.status(500).json({ message: error.message });
   }
 });
 
 export default router;
-

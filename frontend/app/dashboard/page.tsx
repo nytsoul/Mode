@@ -27,15 +27,14 @@ export default function DashboardPage() {
   const fetchStats = async () => {
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
-      // Fetch user stats
-      const [matchesRes, chatsRes, memoriesRes] = await Promise.all([
-        axios.get(`${API_URL}/api/matches/suggestions`).catch(() => ({ data: { suggestions: [] } })),
+      // Fetch user stats (matches endpoint removed; avoid calling missing route)
+      const [chatsRes, memoriesRes] = await Promise.all([
         axios.get(`${API_URL}/api/chat`).catch(() => ({ data: { chats: [] } })),
         axios.get(`${API_URL}/api/memories`).catch(() => ({ data: { count: 0 } })),
       ])
 
       setStats({
-        matches: matchesRes.data.suggestions?.length || 0,
+        matches: 0,
         chats: chatsRes.data.chats?.length || 0,
         memories: memoriesRes.data.count || 0,
       })
@@ -91,43 +90,21 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Stats */}
-      {stats && (
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <StatCard
-            icon={<Users className="w-8 h-8" />}
-            title="Matches"
-            value={stats.matches}
-            link="/matches"
-          />
-          <StatCard
-            icon={<MessageCircle className="w-8 h-8" />}
-            title="Chats"
-            value={stats.chats}
-            link="/chat"
-          />
-          <StatCard
-            icon={<Image className="w-8 h-8" />}
-            title="Memories"
-            value={stats.memories}
-            link="/memories"
-          />
-        </div>
-      )}
-
-      {/* Quick Actions */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Quick Actions - Only Memories, Chat, Calendar, Verification, Games */}
+      <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
         <QuickActionCard
-          icon={<Sparkles className="w-6 h-6" />}
-          title="AI Poem Generator"
-          description="Generate a personalized poem"
-          link="/ai/poem"
+          icon={<Image className="w-6 h-6" />}
+          title="Memories"
+          description="View your memory gallery"
+          link="/memories"
+          stats={stats?.memories}
         />
         <QuickActionCard
-          icon={<Sparkles className="w-6 h-6" />}
-          title="AI Quiz"
-          description="Take a compatibility quiz"
-          link="/ai/quiz"
+          icon={<MessageCircle className="w-6 h-6" />}
+          title="Chat"
+          description="Message your connections"
+          link="/chat"
+          stats={stats?.chats}
         />
         <QuickActionCard
           icon={<Calendar className="w-6 h-6" />}
@@ -140,12 +117,6 @@ export default function DashboardPage() {
           title="Verification"
           description="Verify your profile"
           link="/verification"
-        />
-        <QuickActionCard
-          icon={<MessageCircle className="w-6 h-6" />}
-          title="Chat Assistant"
-          description="Get conversation tips"
-          link="/chat/assistant"
         />
         <QuickActionCard
           icon={<Users className="w-6 h-6" />}
@@ -177,20 +148,27 @@ function QuickActionCard({
   title,
   description,
   link,
+  stats,
 }: {
   icon: React.ReactNode
   title: string
   description: string
   link: string
+  stats?: number
 }) {
   return (
     <Link
       href={link}
-      className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 hover:shadow-lg transition-shadow"
+      className="bg-gradient-to-br from-gray-800 to-gray-900 dark:from-gray-700 dark:to-gray-800 rounded-lg shadow-lg p-6 hover:shadow-xl transition-all hover:scale-105 border border-gray-700"
     >
-      <div className="text-primary-600 mb-4">{icon}</div>
-      <h3 className="text-lg font-semibold mb-2">{title}</h3>
-      <p className="text-gray-600 dark:text-gray-400 text-sm">{description}</p>
+      <div className="flex items-start justify-between mb-4">
+        <div className="text-pink-500">{icon}</div>
+        {stats !== undefined && (
+          <div className="text-2xl font-bold text-pink-500">{stats}</div>
+        )}
+      </div>
+      <h3 className="text-lg font-semibold text-white mb-1">{title}</h3>
+      <p className="text-gray-400 text-sm">{description}</p>
     </Link>
   )
 }

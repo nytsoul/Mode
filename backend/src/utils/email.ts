@@ -100,3 +100,26 @@ export const sendPasswordResetEmail = async (email: string, token: string): Prom
   }
 };
 
+export const sendSimpleEmail = async (email: string, subject: string, htmlBody: string): Promise<boolean> => {
+  if (!transporter || !process.env.EMAIL_FROM) {
+    console.log(`[Email - SMTP not configured] To: ${email}`);
+    console.log(`Subject: ${subject}`);
+    console.log(`Body: ${htmlBody}`);
+    return true;
+  }
+
+  try {
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM,
+      to: email,
+      subject,
+      html: htmlBody,
+    });
+    return true;
+  } catch (error) {
+    console.error('Email sending error:', error);
+    console.log(`[Email - Failed to send] To: ${email}`);
+    return false;
+  }
+};
+

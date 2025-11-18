@@ -2,6 +2,8 @@ import express, { Response } from 'express';
 import Chat, { Message } from '../models/Chat';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import OpenAI from 'openai';
+import { generateOTP, storeOTP, verifyOTP } from '../utils/otp';
+import { sendSimpleEmail } from '../utils/email';
 
 const router = express.Router();
 
@@ -46,6 +48,64 @@ router.post('/create', authenticate, async (req: AuthRequest, res: Response) => 
     res.json({ chat });
   } catch (error: any) {
     res.status(500).json({ message: error.message });
+  }
+});
+
+// Request OTP to initiate chat with a user by email
+router.post('/request-otp', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: 'Email is required' });
+
+    const targetUser = await (await import('../models/User')).default.findOne({ email }).lean();
+    if (!targetUser) return res.status(404).json({ message: 'Target user not found' });
+
+    const otp = generateOTP();
+    const key = `chat:${req.userId}:${String(targetUser._id)}`;
+    storeOTP(key, otp, 10);
+
+    // Send OTP to the target user's email (or log it when email not configured)
+    const subject = 'Loves — Chat connection request OTP';
+    const body = `<p>You have a chat connection request from a user. Use this OTP to approve the connection: <strong>${otp}</strong></p><p>This code is valid for 10 minutes.</p>`;
+    await sendSimpleEmail(targetUser.email, subject, body);
+
+    // If SMTP/email is not configured in dev, return the OTP in the response to make testing easier.
+    const isEmailConfigured = !!(process.env.SMTP_HOST && process.env.EMAIL_FROM)
+
+    const responsePayload: any = { message: 'OTP sent to target user (they must verify)', targetId: String(targetUser._id) };
+    if (!isEmailConfigured) {
+      responsePayload.otp = otp; // development convenience
+    }
+
+    res.json(responsePayload);
+  } catch (error: any) {
+    console.error('Request OTP error:', error);
+    res.status(500).json({ message: error.message || 'Failed to request OTP' });
+  }
+});
+
+// Verify OTP and create/get chat on success
+router.post('/verify-otp', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { targetId, otp, mode = 'love' } = req.body;
+    if (!targetId || !otp) return res.status(400).json({ message: 'targetId and otp are required' });
+
+    const key = `chat:${req.userId}:${targetId}`;
+    if (!verifyOTP(key, otp)) {
+      return res.status(400).json({ message: 'Invalid or expired OTP' });
+    }
+
+    // Now create or return existing chat
+    let chat = await Chat.findOne({ participants: { $all: [req.userId, targetId] }, mode });
+    if (!chat) {
+      chat = new Chat({ participants: [req.userId, targetId], mode });
+      await chat.save();
+    }
+
+    res.json({ chat });
+  } catch (error: any) {
+    console.error('Verify OTP error:', error);
+    res.status(500).json({ message: error.message || 'Failed to verify OTP' });
   }
 });
 

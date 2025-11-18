@@ -63,7 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`
       setUser(response.data.user)
       toast.success('Login successful!')
-      router.push('/dashboard')
+      router.push('/ai/select-mode')
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Login failed')
       throw error
@@ -77,7 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`
       setUser(response.data.user)
       toast.success('Registration successful! Please verify your email and phone.')
-      router.push('/dashboard')
+      router.push('/ai/select-mode')
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Registration failed')
       throw error

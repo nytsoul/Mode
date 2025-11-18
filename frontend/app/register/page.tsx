@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import Link from 'next/link'
 import { useAuth } from '@/hooks/useAuth'
 import { useRouter } from 'next/navigation'
-import { Heart, Users, AlertCircle } from 'lucide-react'
+import { Heart, Users, AlertCircle, Sparkles } from 'lucide-react'
 
 const registerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -32,6 +32,11 @@ export default function RegisterPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [selectedMode, setSelectedMode] = useState<'love' | 'friends'>('love')
+  const [animate, setAnimate] = useState(false)
+
+  useEffect(() => {
+    setAnimate(true)
+  }, [selectedMode])
 
   const {
     register,
@@ -61,175 +66,244 @@ export default function RegisterPage() {
     }
   }
 
+  const isLoveMode = selectedMode === 'love'
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-pink-50 via-purple-50 to-indigo-50 dark:from-gray-900 dark:via-purple-900 dark:to-indigo-900 py-8 px-4">
-      <div className="max-w-lg w-full">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8">
+    <div className={`min-h-screen flex items-center justify-center py-8 px-4 transition-all duration-700 bg-gradient-to-br from-gray-900 to-gray-800`}> 
+      {/* Floating hearts for love mode */}
+      {isLoveMode && (
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          {[...Array(5)].map((_, i) => (
+            <div
+              key={i}
+              className={`absolute text-pink-300 opacity-20 text-6xl animate-pulse ${
+                animate ? 'animate-float' : ''
+              }`}
+              style={{
+                left: `${20 + i * 15}%`,
+                top: `${10 + i * 20}%`,
+                animation: `float ${4 + i}s infinite ease-in-out`,
+              }}
+            >
+              ❤️
+            </div>
+          ))}
+        </div>
+      )}
+
+      <style jsx>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0px) translateX(0px); }
+          50% { transform: translateY(-20px) translateX(10px); }
+        }
+      `}</style>
+
+      <div className="max-w-lg w-full relative z-10">
+        {/* Mode Selection Cards */}
+        <div className="grid grid-cols-2 gap-4 mb-8">
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedMode('love')
+              setValue('modeDefault', 'love')
+            }}
+            className={`p-6 rounded-2xl border-3 transition-all duration-500 transform ${
+              isLoveMode
+                ? 'border-pink-500 bg-gradient-to-br from-pink-100 to-red-100 shadow-2xl scale-105'
+                : 'border-gray-300 bg-white hover:border-pink-300'
+            }`}
+          >
+            <div className={`text-4xl mb-3 transition-transform duration-500 ${isLoveMode ? 'scale-125 animate-pulse' : 'scale-100'}`}>
+              ❤️
+            </div>
+            <div className={`font-bold transition-colors ${isLoveMode ? 'text-pink-600' : 'text-gray-500'}`}>
+              Love Mode
+            </div>
+            <div className="text-xs text-gray-600 mt-1">Romantic connections</div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedMode('friends')
+              setValue('modeDefault', 'friends')
+            }}
+            className={`p-6 rounded-2xl border-3 transition-all duration-500 transform ${
+              !isLoveMode
+                ? 'border-indigo-500 bg-gradient-to-br from-blue-100 to-indigo-100 shadow-2xl scale-105'
+                : 'border-gray-300 bg-white hover:border-indigo-300'
+            }`}
+          >
+            <div className={`text-4xl mb-3 transition-transform duration-500 ${!isLoveMode ? 'scale-125 animate-bounce' : 'scale-100'}`}>
+              👥
+            </div>
+            <div className={`font-bold transition-colors ${!isLoveMode ? 'text-indigo-600' : 'text-gray-500'}`}>
+              Friends Mode
+            </div>
+            <div className="text-xs text-gray-600 mt-1">Platonic friendships</div>
+          </button>
+        </div>
+
+        {/* Main Form Card */}
+        <div className={`rounded-2xl shadow-2xl p-8 transition-all duration-700 bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700`}>
           <div className="text-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-              Create your account
+            <div className={`text-5xl mb-3 ${isLoveMode ? 'animate-pulse' : 'animate-bounce'}`}>
+              {isLoveMode ? '❤️' : '👥'}
+            </div>
+            <h2 className={`text-3xl font-bold mb-1 text-white`}>
+              {isLoveMode ? 'Find Your Love' : 'Find Your Friends'}
             </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Choose your mode - this cannot be changed later
+            <p className="text-sm text-gray-300">
+              {isLoveMode ? 'Build meaningful romantic connections' : 'Connect with amazing people'}
             </p>
           </div>
 
-          {/* Mode Selection - Prominent */}
-          <div className="mb-6 p-4 bg-gradient-to-r from-pink-100 to-purple-100 dark:from-pink-900 dark:to-purple-900 rounded-lg">
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-              Select Mode * <span className="text-red-500">(Cannot be changed)</span>
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedMode('love')
-                  setValue('modeDefault', 'love')
-                }}
-                className={`p-4 rounded-lg border-2 transition-all ${
-                  selectedMode === 'love'
-                    ? 'border-pink-500 bg-pink-50 dark:bg-pink-900 shadow-lg scale-105'
-                    : 'border-gray-300 dark:border-gray-600 hover:border-pink-300'
-                }`}
-              >
-                <Heart className={`w-6 h-6 mx-auto mb-2 ${selectedMode === 'love' ? 'text-pink-600' : 'text-gray-400'}`} />
-                <div className="font-semibold text-sm text-gray-900 dark:text-white">Love Mode</div>
-                <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">Romantic connections</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedMode('friends')
-                  setValue('modeDefault', 'friends')
-                }}
-                className={`p-4 rounded-lg border-2 transition-all ${
-                  selectedMode === 'friends'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900 shadow-lg scale-105'
-                    : 'border-gray-300 dark:border-gray-600 hover:border-blue-300'
-                }`}
-              >
-                <Users className={`w-6 h-6 mx-auto mb-2 ${selectedMode === 'friends' ? 'text-blue-600' : 'text-gray-400'}`} />
-                <div className="font-semibold text-sm text-gray-900 dark:text-white">Friends Mode</div>
-                <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">Platonic friendships</div>
-              </button>
-            </div>
-            <div className="mt-3 flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 p-2 rounded">
-              <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-              <span>Mode selection is permanent. You'll need to create a new account to change it.</span>
-            </div>
+          {/* Warning Banner */}
+          <div className={`mb-6 p-4 rounded-xl flex items-start gap-2 bg-gray-800 border border-gray-700`}>
+            <AlertCircle className={`w-5 h-5 mt-0.5 flex-shrink-0 text-gray-300`} />
+            <span className={`text-sm font-medium text-gray-300`}>
+              Mode selection is permanent. You'll need to create a new account to change it.
+            </span>
           </div>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className={`block text-xs font-bold mb-2 transition-colors ${
+                  isLoveMode ? 'text-pink-400' : 'text-indigo-400'
+                }`}>
                   Full Name *
                 </label>
                 <input
                   {...register('name')}
                   type="text"
-                  className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 dark:bg-gray-700 dark:text-white"
+                  placeholder="Your name"
+                  className={`w-full px-4 py-3 text-sm border-2 rounded-xl focus:outline-none transition-all ${
+                    isLoveMode
+                      ? 'border-gray-700 focus:border-pink-500 focus:ring-2 focus:ring-pink-500 bg-gray-800 text-white'
+                      : 'border-gray-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 bg-gray-800 text-white'
+                  }`}
                 />
-                {errors.name && <p className="mt-1 text-xs text-red-600">{errors.name.message}</p>}
+                {errors.name && <p className="mt-1 text-xs text-red-600 font-semibold">{errors.name.message}</p>}
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className={`block text-xs font-bold mb-2 transition-colors ${
+                  isLoveMode ? 'text-pink-600' : 'text-indigo-600'
+                }`}>
                   Date of Birth *
                 </label>
                 <input
                   {...register('dob')}
                   type="date"
-                  className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 dark:bg-gray-700 dark:text-white"
+                  className={`w-full px-4 py-3 text-sm border-2 rounded-xl focus:outline-none transition-all border-gray-700 bg-gray-800 text-white`} 
                 />
-                {errors.dob && <p className="mt-1 text-xs text-red-600">{errors.dob.message}</p>}
+                {errors.dob && <p className="mt-1 text-xs text-red-600 font-semibold">{errors.dob.message}</p>}
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Email *
+              <label className={`block text-xs font-bold mb-2 transition-colors ${
+                isLoveMode ? 'text-pink-600' : 'text-indigo-600'
+              }`}>
+                📧 Email *
               </label>
               <input
                 {...register('email')}
                 type="email"
-                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 dark:bg-gray-700 dark:text-white"
+                placeholder="your@email.com"
+                className={`w-full px-4 py-3 text-sm border-2 rounded-xl focus:outline-none transition-all border-gray-700 bg-gray-800 text-white`}
               />
-              {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>}
+              {errors.email && <p className="mt-1 text-xs text-red-600 font-semibold">{errors.email.message}</p>}
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Phone Number *
+              <label className={`block text-xs font-bold mb-2 transition-colors ${
+                isLoveMode ? 'text-pink-600' : 'text-indigo-600'
+              }`}>
+                📞 Phone Number *
               </label>
               <input
                 {...register('phone')}
                 type="tel"
-                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 dark:bg-gray-700 dark:text-white"
+                placeholder="+1 (555) 000-0000"
+                className={`w-full px-4 py-3 text-sm border-2 rounded-xl focus:outline-none transition-all border-gray-700 bg-gray-800 text-white`}
               />
-              {errors.phone && <p className="mt-1 text-xs text-red-600">{errors.phone.message}</p>}
+              {errors.phone && <p className="mt-1 text-xs text-red-600 font-semibold">{errors.phone.message}</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Password *
+                <label className={`block text-xs font-bold mb-2 transition-colors ${
+                  isLoveMode ? 'text-pink-600' : 'text-indigo-600'
+                }`}>
+                  🔐 Password *
                 </label>
                 <input
                   {...register('password')}
                   type="password"
-                  className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 dark:bg-gray-700 dark:text-white"
+                  placeholder="Min 8 characters"
+                  className={`w-full px-4 py-3 text-sm border-2 rounded-xl focus:outline-none transition-all border-gray-700 bg-gray-800 text-white`}
                 />
-                {errors.password && <p className="mt-1 text-xs text-red-600">{errors.password.message}</p>}
+                {errors.password && <p className="mt-1 text-xs text-red-600 font-semibold">{errors.password.message}</p>}
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Confirm Password *
+                <label className={`block text-xs font-bold mb-2 transition-colors ${
+                  isLoveMode ? 'text-pink-600' : 'text-indigo-600'
+                }`}>
+                  ✔️ Confirm *
                 </label>
                 <input
                   {...register('confirmPassword')}
                   type="password"
-                  className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 dark:bg-gray-700 dark:text-white"
+                  placeholder="Repeat password"
+                  className={`w-full px-4 py-3 text-sm border-2 rounded-xl focus:outline-none transition-all border-gray-700 bg-gray-800 text-white`}
                 />
-                {errors.confirmPassword && <p className="mt-1 text-xs text-red-600">{errors.confirmPassword.message}</p>}
+                {errors.confirmPassword && <p className="mt-1 text-xs text-red-600 font-semibold">{errors.confirmPassword.message}</p>}
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Location (Optional)
+              <label className={`block text-xs font-bold mb-2 transition-colors ${
+                isLoveMode ? 'text-pink-600' : 'text-indigo-600'
+              }`}>
+                📍 Location (Optional)
               </label>
               <input
                 {...register('location')}
                 type="text"
                 placeholder="City, State"
-                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 dark:bg-gray-700 dark:text-white"
+                className={`w-full px-4 py-3 text-sm border-2 rounded-xl focus:outline-none transition-all border-gray-700 bg-gray-800 text-white`}
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Bio (Optional)
+              <label className={`block text-xs font-bold mb-2 transition-colors ${
+                isLoveMode ? 'text-pink-600' : 'text-indigo-600'
+              }`}>
+                ✨ Bio (Optional)
               </label>
               <textarea
                 {...register('bio')}
                 rows={2}
                 maxLength={500}
-                placeholder="Tell us about yourself..."
-                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 dark:bg-gray-700 dark:text-white resize-none"
+                placeholder={isLoveMode ? 'Share what makes you special...' : 'Tell us about yourself...'}
+                className={`w-full px-4 py-3 text-sm border-2 rounded-xl focus:outline-none transition-all resize-none border-gray-700 bg-gray-800 text-white`}
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Interests (Optional)
+              <label className={`block text-xs font-bold mb-2 transition-colors ${
+                isLoveMode ? 'text-pink-600' : 'text-indigo-600'
+              }`}>
+                🎯 Interests (Optional)
               </label>
               <input
                 {...register('interests')}
                 type="text"
-                placeholder="music, travel, cooking"
-                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 dark:bg-gray-700 dark:text-white"
+                placeholder={isLoveMode ? 'music, travel, romance' : 'music, games, sports'}
+                className={`w-full px-4 py-3 text-sm border-2 rounded-xl focus:outline-none transition-all border-gray-700 bg-gray-800 text-white`}
               />
             </div>
 
@@ -238,20 +312,27 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={loading}
-              className={`w-full py-3 rounded-lg font-semibold text-white transition-all ${
-                selectedMode === 'love'
-                  ? 'bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600'
-                  : 'bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600'
-              } disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl`}
+              className={`w-full py-4 rounded-xl font-bold text-white text-lg transition-all duration-500 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed shadow-xl hover:shadow-2xl bg-gradient-to-r from-pink-600 to-purple-600`}
             >
-              {loading ? 'Creating account...' : 'Create Account'}
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="animate-spin">⏳</span>
+                  Creating account...
+                </span>
+              ) : (
+                <span className="flex items-center justify-center gap-2">
+                  {isLoveMode ? '❤️' : '👥'} Create Account
+                </span>
+              )}
             </button>
 
-            <p className="text-center text-xs text-gray-600 dark:text-gray-400">
+            <div className="relative py-4">
+              <div className={`h-px ${isLoveMode ? 'bg-pink-200' : 'bg-indigo-200'}`}></div>
+            </div>
+
+            <p className="text-center text-sm text-gray-300">
               Already have an account?{' '}
-              <Link href="/login" className="font-medium text-pink-600 dark:text-pink-400 hover:underline">
-                Sign in
-              </Link>
+              <Link href="/login" className={`font-bold text-white/90 hover:text-white`}>Sign in here</Link>
             </p>
           </form>
         </div>
